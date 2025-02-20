@@ -1,25 +1,209 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Simple Image Compressor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Compressor</title>
     <style>
         body {
-            font-family: Arial;
-            text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
             padding: 20px;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
         .upload-area {
-            border: 2px dashed #ccc;
-            padding: 20px;
-            margin: 20px;
+            border: 3px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            background: #fafafa;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #4CAF50;
+            background: #f0f9f0;
+        }
+
+        .upload-area.dragover {
+            border-color: #4CAF50;
+            background: #e8f5e9;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .status {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .download-btn {
+            display: none;
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #45a049;
+        }
+
+        .stats {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <h1>Image Compressor</h1>
-    <div class="upload-area">
-        <input type="file" accept="image/*">
-        <p>Drop your image here or click to browse</p>
+    <div class="container">
+        <h1>Image Compressor</h1>
+        <div class="upload-area" id="dropZone">
+            <input type="file" id="fileInput" accept="image/*">
+            <p>Drop your image here or click to browse</p>
+        </div>
+        <div class="status" id="status"></div>
+        <div class="stats" id="stats"></div>
+        <button class="download-btn" id="downloadBtn">Download Compressed Image</button>
     </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const stats = document.getElementById('stats');
+        const downloadBtn = document.getElementById('downloadBtn');
+        let compressedImageUrl = null;
+
+        // Handle click to upload
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Handle drag and drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('dragover');
+            }, false);
+        });
+
+        // Handle file selection
+        fileInput.addEventListener('change', handleFile);
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFile({ target: { files: files } });
+        });
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            status.textContent = 'Compressing...';
+            stats.style.display = 'none';
+            downloadBtn.style.display = 'none';
+
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => compressImage(img, file.name, file.size);
+            };
+        }
+
+        function compressImage(img, fileName, originalSize) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Calculate new dimensions
+            let width = img.width;
+            let height = img.height;
+            const maxDimension = 1920;
+
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = (height / width) * maxDimension;
+                    width = maxDimension;
+                } else {
+                    width = (width / height) * maxDimension;
+                    height = maxDimension;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob((blob) => {
+                compressedImageUrl = URL.createObjectURL(blob);
+                const compressionRatio = ((1 - (blob.size / originalSize)) * 100).toFixed(1);
+                
+                // Display stats
+                stats.style.display = 'block';
+                stats.innerHTML = `
+                    Original size: ${(originalSize / 1024 / 1024).toFixed(2)} MB<br>
+                    Compressed size: ${(blob.size / 1024 / 1024).toFixed(2)} MB<br>
+                    Compression ratio: ${compressionRatio}%
+                `;
+
+                // Show download button
+                downloadBtn.style.display = 'block';
+                status.textContent = 'Compression complete!';
+                
+                // Setup download
+                downloadBtn.onclick = () => {
+                    const link = document.createElement('a');
+                    link.href = compressedImageUrl;
+                    link.download = `compressed_${fileName}`;
+                    link.click();
+                };
+            }, 'image/jpeg', 0.8);
+        }
+    </script>
 </body>
 </html>
